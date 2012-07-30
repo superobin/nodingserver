@@ -1,0 +1,8 @@
+//Use the libs as if the action is in the root directory
+//We have global variables
+//Actions are running in sandbox,and cannot crash the outer vm
+var handler = require("./formhandler.js");
+handler.parseRequest(request,function(param) {
+	response.end(JSON.stringify(param));
+	//you can also use template freely.We'll add template support later.
+});

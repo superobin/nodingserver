@@ -13,8 +13,14 @@ function handlePost(request,callback) {
 		str+=data.toString("ascii");
 	});
 	request.on("end",function() {
-		var params = handleGet(request);
-		callback(queryString.parse(str));
+		handleGet(request,function(params) {
+			var queryObj = queryString.parse(str);
+			for(var k in queryObj) {
+				params[k] = queryObj[k];
+			}
+			callback(params);
+		});
+		
 	});
 }
 function handleGet(request,callback) {
