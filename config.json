@@ -1,0 +1,15 @@
+{
+	"servers":[
+		{"webroot":"../webapp",
+		"port":8082,
+		"homepage":"/index.html"
+		}
+	],
+	"hosts":{
+		"localhost:8081":{
+			"host":"localhost",
+			"port":8082,
+			"dynamicPattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
+		}
+	}
+}
