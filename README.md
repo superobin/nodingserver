@@ -42,6 +42,10 @@ How to Use
 	}
 	
 	Then create webapp like the samples.
+	
+	You can simply lauch the servers using 
+	
+	node laucher.js
 
 Restrictions
 -------
