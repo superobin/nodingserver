@@ -17,12 +17,12 @@
 		The key is the host&port passed from browser,value is web server config
 		Web server will automaticly created by front server.
 		*/
-		"localhost:8081":{
+		"localhost":{
 			"host":"localhost",
 			"port":8082,
 			"dynamicPattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
 		},
-		"localhost:8080":{
+		"127.0.0.2":{
 			"host":"localhost",
 			"port":8083,
 			"dynamicPattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]

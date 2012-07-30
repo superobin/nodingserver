@@ -3,7 +3,7 @@
 	
 	function write404(res) {
 		res.writeHeader(404);	
-		res.end("<h1>Not Found</h1>");
+		res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 	}
 	
 	function isDynamic(patterns,url) {
@@ -36,12 +36,15 @@
 		this.server = http.createServer(function(req,res) {
 			try {
 				var headers = req.headers;
-				var hostport = hostMap[headers.host];
+				var hostport = hostMap[headers.host.split(":")[0]];
 				if(!hostport){
 					write404(res);
 					return;
 				}
 				headers.host = hostport.host +":"+hostport.port;
+				headers['x-forwarded-for'] = headers['x-forwarded-for']
+					?(headers['x-forwarded-for']+","+req.connection.remoteAddress)
+					:req.connection.remoteAddress;
 				var options = {
 					host: hostport.host,
 					port: hostport.port,
@@ -127,7 +130,4 @@
 		this.server.listen(port);
 		console.log("Server start at "+port);
 	}
-	
-	
-	
 })();

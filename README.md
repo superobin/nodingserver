@@ -6,7 +6,6 @@ NodingServer is a simple webServer with a front server(reverse proxy).
 How to Use
 ------------
 	First config the config file.
-	
 	{
 		"webServers":[
 			{
@@ -26,12 +25,12 @@ How to Use
 			The key is the host&port passed from browser,value is web server config
 			Web server will automaticly created by front server.
 			*/
-			"localhost:8081":{
+			"localhost":{
 				"host":"localhost",
 				"port":8082,
 				"dynamicPattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
 			},
-			"localhost:8080":{
+			"127.0.0.1":{
 				"host":"localhost",
 				"port":8083,
 				"dynamicPattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]

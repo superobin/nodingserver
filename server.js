@@ -74,10 +74,12 @@
 			}
 			
 		}
+		
 		function write404(res) {
 			res.writeHeader(404);	
-			res.end("<h1>Not Found</h1>");
+			res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 		}
+		
 		function staticRequest(req,res) {
 			var urlObj =  urlUtil.parse(req.url);
 			var filePath = webRoot+urlObj.pathname;
@@ -158,9 +160,7 @@
 				res.end((e||"").toString());
 			}
 		};
-		
 		this.requestHandler = requestHandler;
-		
 	}
 	
 	exports.Server.prototype.startServer = function(_port) {
