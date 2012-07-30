@@ -165,6 +165,7 @@
 	
 	exports.Server.prototype.startServer = function(_port) {
 		http.createServer(this.requestHandler).listen(_port);
+		console.log("WebServer started at port"+_port);
 	}
 })();
 
