@@ -23,11 +23,12 @@ var fs = require("fs");
 				require:require,
 				requireUserLib:function() {
 					var ary = [];
-					ary[0] = webroot+context.webAppConfig.libroot+"/"+arguments[0];
+					ary[0] = webroot+context.webAppConfig.libdir+"/"+arguments[0];
+
 					for(var i = 0;i<arguments.length;i++) {
 						ary.push(arguments[i]);
 					}
-					require.apply(null,arguments);
+					require.apply(null,ary);
 				}
 			};
 			for(var k in global) {
@@ -111,9 +112,8 @@ var fs = require("fs");
 					writeHead.apply(this,ary);
 				}
 				var contextPath = context.contextPath;
-				if(contextPath[contextPath.length-1] == "/"){
-					contextPath = contextPath.substr(0,contextPath.length-2);
-				}
+				contextPath = stripeLastSlash(contextPath);
+				
 				baseHandler(req,res,contextPath+pagePath);
 			} else {
 				writeBasic(res,code,message);
@@ -238,7 +238,12 @@ var fs = require("fs");
 			}
 			
 		}
-		
+		function stripeLastSlash(str) {
+			if(str[str.length-1] == "/"){
+				str = str.substr(0,str.length-2);
+			}
+			return str;
+		}
 		function baseHandler(req,res,url) {
 			
 			var webServerConfig = _server.config;
@@ -252,10 +257,13 @@ var fs = require("fs");
 				contextPath:contextPath
 			}
 			var homepage = webAppConfig.homepage||"/index.html";
+			console.log(context);
 			try {
 				var url = rewriteURL(url,context);
-				if(url == "/") {
-					sendRedirect(res,homepage);
+				
+				var stripedURL = stripeContextPath(url,contextPath);
+				if(stripedURL == "/"||stripedURL == "") {
+					sendRedirect(res,stripeLastSlash(contextPath)+homepage);
 				} else if(dynamicPattern.test(url)) {
 					dynamicRequest(req,res,url,context);
 				} else {

@@ -1,1 +1,2 @@
-eaaa
+requireUserLib("module.js");
+response.end("");
