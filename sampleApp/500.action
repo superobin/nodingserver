@@ -1,0 +1,2 @@
+var error = request.errorObject;
+response.end("<html><head><title>"+request.errorCode+"</title></head><body>"+error+"</body></html>");

@@ -1,19 +1,15 @@
 {
-	"libroot":"/_lib",
+	"libdir":"/_lib",
 	"urlRewrite":[
 		{
 			"from":/([a-zA-Z0-9_-]+?)\.do/,
-			"to":"$1.action"
-		}
-	],
-	"allias":[
-		{
-			"from":"/myallias/",
-			"to":"/"
+			"to":"$1.action",
+			"doNotContinue":true
 		}
 	],
 	"homepage":"/index2.html",
 	"errorpage":{
-		"404":"/404.html"
+		"404":"/404.html",
+		"500":"/500.action"
 	}
 }

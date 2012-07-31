@@ -55,7 +55,7 @@ var fs = require("fs");
 		function dynamicRequest(req,res,url) {
 			var errHandler = function (err) {
 			
-				writeErrorPage(res,500,err.toString());
+				writeErrorPage(req,res,500,err.toString());
 			}
 			var urlObj =  urlUtil.parse(url);
 			var filePath = webRoot+urlObj.pathname;
@@ -73,49 +73,64 @@ var fs = require("fs");
 								var action = new BaseAction(urlObj.pathname,webRoot);
 								actionMap[urlObj.pathname] = action;
 								action.process(req,res);
-								var watcher = fs.watch(webRoot+urlObj.pathname,function(a,b) {
+								fs.watch(webRoot+urlObj.pathname,function(a,b) {
 									delete actionMap[urlObj.pathname];
-									
 									fs.unwatchFile(webRoot+urlObj.pathname);
 								});
 							} catch(e) {
 								errHandler(e);
 							}
 					} else {
-						writeErrorPage(res,404,"Not Found");
+						writeErrorPage(req,res,404,"Not Found");
 					}
 				});
 			}
 			
 		}
 		
-		function writeBasic404(res) {
-			res.writeHeader(404);	
-			res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
+		function writeBasic(res,code,message) {
+			res.writeHead(code);
+			res.end("<html><head><title>"+code+"</title></head><body><h1>"+message||"No error message."+"</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
+			
+			
+			//res.writeHead(404);	
+			//res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 		}
 		function sendRedirect(res,location) {
-			res.writeHeader(302,{
+			res.writeHead(302,{
 				"Location":location
 			});
 			res.end();
 		}
-		function writeErrorPage(res,code,message) {
+		function writeErrorPage(req,res,code,message) {
 			var pagePath = (webAppConfig.errorpage||{})[code];
 			console.log(webRoot+pagePath);
-			if(code==404&&!fs.existsSync(webRoot+pagePath)) {//prevent from 404 loop
-				writeBasic404(res);
+			if(req.errorObject||req.errorCode) {//prevent from error loop
+				writeBasic(res,req.errorCode,"Page Not Found");
 			} else if(pagePath) {
-				sendRedirect(res,pagePath);
+				req.errorObject = message;
+				req.errorCode = code;
+				var writeHead = res.writeHead;
+				res.writeHead = function() {
+					var ary = [code];
+					for(var i=1;i<arguments.length;i++) {
+						ary.push(arguments[i]);
+					}
+					writeHead.apply(this,ary);
+				}
+				
+				console.log(pagePath);
+				
+				baseHandler(req,res,pagePath);
 			} else {
-				res.writeHeader(code);
-				res.end("<html><head><title>"+code+"</title></head><body><h1>"+message+"</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
+				writeBasic(res,code,message);
 			}
 		}
-		function staticRequest(req,res,url) {
-			
 		
+		function staticRequest(req,res,url) {
 			var urlObj =  urlUtil.parse(url);
 			var filePath = webRoot+urlObj.pathname;
+			
 			if(filePath.indexOf(".")>=0) {
 				var extName = filePath.substr(filePath.lastIndexOf(".")+1);
 			} else {
@@ -136,11 +151,12 @@ var fs = require("fs");
 			if(compressMethod) {
 				header['Content-Encoding'] = compressMethod;
 			}
+			console.log(filePath,fs.existsSync(filePath));
 			fs.exists(filePath, function (exists) {
 				if(exists) {
 					fs.readFile(filePath,function(err,data){
 						if(err) {
-							writeErrorPage(res,404,"Not Found");
+							writeErrorPage(req,res,404,"Not Found");
 							return;
 						}
 						res.writeHead(200, header);
@@ -154,7 +170,7 @@ var fs = require("fs");
 						
 					});
 				} else {
-					writeErrorPage(res,404,"Not Found");
+					writeErrorPage(req,res,404,"Not Found");
 				}
 			});
 		}
@@ -167,16 +183,7 @@ var fs = require("fs");
 			};
 		}
 		
-		function alliasURL(url) {
-			var alliases = webAppConfig.allias;
-			alliases.forEach(function(al) {
-				if(url.indexOf(al.from) == 0) {
-					url = al.to+url.substr(al.from.length+1);
-				}
-			});
-			return url;
-			
-		}
+	
 		function rewriteURL(url) {
 			var rewrites = webAppConfig.urlRewrite;
 			rewrites.forEach(function(rewrite) {
@@ -186,30 +193,30 @@ var fs = require("fs");
 			});
 			return url;
 		}
-		var requestHandler = function(req,res) {
+		
+		function baseHandler(req,res,url) {
 			try {
-				console.log("--------------------");
-				console.log("connector:\t"+req.connection.remoteAddress+":"+req.connection.remotePort);
-				console.log("host:\t\t"+req.headers.host);
-				console.log("url:\t\t"+req.url);
-				console.log("time:\t\t"+new Date());
-				console.log("--------------------");
-				var url = rewriteURL(alliasURL(req.url));
-				
+				var url = rewriteURL(url);
 				if(url == "/") {
-				
 					sendRedirect(res,homepage);
-					
 				} else if(dynamicPattern.test(url)) {
 					dynamicRequest(req,res,url);
 				} else {
 					staticRequest(req,res,url);
 				}
 			} catch(e) {
-			
-				writeErrorPage(res,500,(e||"").toString());
+				writeErrorPage(req,res,500,(e||"").toString());
 				
 			}
+		}
+		var requestHandler = function(req,res) {
+			console.log("--------------------");
+			console.log("connector:\t"+req.connection.remoteAddress+":"+req.connection.remotePort);
+			console.log("host:\t\t"+req.headers.host);
+			console.log("url:\t\t"+req.url);
+			console.log("time:\t\t"+new Date());
+			console.log("--------------------");
+			baseHandler(req,res,req.url);
 		};
 		this.requestHandler = requestHandler;
 	}

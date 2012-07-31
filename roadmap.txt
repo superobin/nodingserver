@@ -8,7 +8,10 @@ WebServer的多端口支持 NOT SUPPORTED
 
 WebServer的webapp级配置文件规划 .webappconfig OK
 
-WebServer的URLRewrite支持 OK
+WebServer的URLRewrite支持  doNotContinue
+
+WebServer的Alias 注意 contextPath
+
 
 WebAPP级errorpage配置 OK
 

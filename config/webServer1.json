@@ -2,5 +2,11 @@
 	"webroot":"./sampleApp",
 	"ports":[8082,8085],
 	"homepage":"/index.html",
-	"autoReloadResources":false
+	"autoReloadResources":false,
+	"alias":[
+		{
+			"contextPath":"/test",
+			"approot":"./sampleApp2"
+		}
+	]
 }

@@ -15,7 +15,6 @@
 		return false;
 	}
 	
-	
 	function supportedCompressMethod(req) {
 		var acceptEncoding = req.headers["accept-encoding"]||"";
 		if(acceptEncoding.indexOf("deflate")>=0){
