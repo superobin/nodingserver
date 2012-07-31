@@ -1,0 +1,31 @@
+﻿注释/说明文档
+
+
+WebServer和FrontServer在配置文件上拆分 OK
+
+WebServer的多端口支持 NOT SUPPORTED
+
+
+WebServer的webapp级配置文件规划 .webappconfig OK
+
+WebServer的URLRewrite支持 OK
+
+WebAPP级errorpage配置 OK
+
+
+WebServer的Session/Cookie支持
+WebServer的View层模板实现
+
+WebServer/FrontServer的https支持
+WebServer/FrontServer的WebSocket支持
+
+FrontServer负载均衡的实现
+WebServer/FrontServer的多进程/集群支持
+
+缓存服务器实现，基于memcache协议
+FrontServer静态缓存清除通知接口
+WebServer的Session/Cookie缓存
+
+日志服务器实现，基于syslog协议
+
+测试用例

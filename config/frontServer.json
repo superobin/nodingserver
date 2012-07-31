@@ -1,0 +1,21 @@
+{
+	"mappingHosts":{
+		/*
+		Hosts that front server proxies.
+		The key is the host/domainname passed from browser,value is web server config.
+		*/
+		"localhost":{
+			"host":"localhost",
+			"port":8082,
+			"noCachePattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
+		},
+		"127.0.0.2":{
+			"host":"localhost",
+			"port":8083,
+			"noCachePattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
+		}
+	},
+	"listenPort":8081,
+	"cacheSize":1024*1024*64,//in bytes,not exact
+	"standalone":true//not implemented
+}

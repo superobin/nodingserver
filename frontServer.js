@@ -27,7 +27,7 @@
 	
 	exports.Server = function(config) {
 		var hostMap = config.mappingHosts;
-		var port = config.listenPort;
+		var port = this.port = config.listenPort;
 		var http = require("http");
 		
 		var LRUCache = require("./LRUCache.js").LRUCache;
@@ -73,7 +73,7 @@
 						});
 						proxyRes.on('end',function() {
 							if(cacheCallback) {
-								cacheCallback(cacheData);
+								cacheCallback(cacheData,proxyRes.statusCode);
 							} else {
 								res.end();
 							}
@@ -93,7 +93,7 @@
 					});
 				}
 				
-				if(!isDynamic(hostport.dynamicPattern,req.url)) {
+				if(!isDynamic(hostport.noCachePattern,req.url)&&req.method=="GET") {
 					var compressMethod = supportedCompressMethod(req)||"plain";
 					var cacheKey = compressMethod+"|"+hostport.host+":"+hostport.port+req.url;
 					console.log("CacheKey:"+cacheKey);
@@ -111,8 +111,10 @@
 						console.log("HitCount:"+cachedEntry.hitCount);
 						writeCachedEntry(cachedEntry);	
 					} else {
-						commonLoad(function(data) {
-							staticCache.put(cacheKey,data);
+						commonLoad(function(data,statusCode) {
+							if(statusCode == 200) {
+								staticCache.put(cacheKey,data);
+							}
 							writeCachedEntry(data);	
 						});
 					}
@@ -126,8 +128,8 @@
 		});
 	}
 	
-	exports.Server.prototype.startServer = function(port) {
-		this.server.listen(port);
-		console.log("Server start at "+port);
+	exports.Server.prototype.start = function() {
+		this.server.listen(this.port);
+		console.log("Server start at "+this.port);
 	}
 })();

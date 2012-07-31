@@ -1,10 +1,26 @@
-
+var fs = require("fs");
 (function() {
 	var http = require("http");
+	function loadWebAppConfig(webServerConfig){
+		var filePath = webServerConfig.webroot+"/.webappconfig";
+		if(fs.existsSync(filePath)) {
+			try {
+				return eval("("+fs.readFileSync(filePath,"utf8")+")");
+			} catch(e) {
+				console.log("ERROR in .webappconfig file\n"+e.toString());
+			}
+		} else {
+			console.log("WARN no .webappconfig file specified");
+			return {};
+		}
+	}
 	
-	exports.Server = function(webRoot,homepage) {
-		var webRoot = webRoot || "./webapp";
-		homepage = homepage||"/index.html";
+	exports.Server = function(webServerConfig) {
+		var webAppConfig = loadWebAppConfig(webServerConfig);
+		
+		var webRoot = webServerConfig.webroot || "./webapp";
+		this.config = webServerConfig;
+		var homepage = webAppConfig.homepage||"/index.html";
 		var encoding = 'utf8';
 		var fs  = require("fs");
 		var zlib = require("zlib");
@@ -12,9 +28,7 @@
 		var vm = require("vm");
 		var dynamicPattern = /^.+?([a-zA-Z0-9\-a]+)\.action(\?.+)?$/;
 		var ContentTypeMap = require("./content_types");
-		
 		var actionMap = {};
-		
 		
 		var BaseAction = function(codePath) {
 			var code = fs.readFileSync(webRoot+codePath,encoding);
@@ -38,12 +52,12 @@
 		
 		
 		
-		function dynamicRequest(req,res) {
+		function dynamicRequest(req,res,url) {
 			var errHandler = function (err) {
-				res.writeHeader(500);
-				res.end(err.toString());
+			
+				writeErrorPage(res,500,err.toString());
 			}
-			var urlObj =  urlUtil.parse(req.url);
+			var urlObj =  urlUtil.parse(url);
 			var filePath = webRoot+urlObj.pathname;
 			var dirPath = filePath.substr(0,filePath.lastIndexOf("/"));
 			if(actionMap[urlObj.pathname]) {
@@ -68,20 +82,39 @@
 								errHandler(e);
 							}
 					} else {
-						write404(res);
+						writeErrorPage(res,404,"Not Found");
 					}
 				});
 			}
 			
 		}
 		
-		function write404(res) {
+		function writeBasic404(res) {
 			res.writeHeader(404);	
 			res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 		}
+		function sendRedirect(res,location) {
+			res.writeHeader(302,{
+				"Location":location
+			});
+			res.end();
+		}
+		function writeErrorPage(res,code,message) {
+			var pagePath = (webAppConfig.errorpage||{})[code];
+			console.log(webRoot+pagePath);
+			if(code==404&&!fs.existsSync(webRoot+pagePath)) {//prevent from 404 loop
+				writeBasic404(res);
+			} else if(pagePath) {
+				sendRedirect(res,pagePath);
+			} else {
+				res.writeHeader(code);
+				res.end("<html><head><title>"+code+"</title></head><body><h1>"+message+"</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
+			}
+		}
+		function staticRequest(req,res,url) {
+			
 		
-		function staticRequest(req,res) {
-			var urlObj =  urlUtil.parse(req.url);
+			var urlObj =  urlUtil.parse(url);
 			var filePath = webRoot+urlObj.pathname;
 			if(filePath.indexOf(".")>=0) {
 				var extName = filePath.substr(filePath.lastIndexOf(".")+1);
@@ -107,7 +140,7 @@
 				if(exists) {
 					fs.readFile(filePath,function(err,data){
 						if(err) {
-							write404(res);
+							writeErrorPage(res,404,"Not Found");
 							return;
 						}
 						res.writeHead(200, header);
@@ -121,7 +154,7 @@
 						
 					});
 				} else {
-					write404(res);
+					writeErrorPage(res,404,"Not Found");
 				}
 			});
 		}
@@ -134,7 +167,25 @@
 			};
 		}
 		
-		
+		function alliasURL(url) {
+			var alliases = webAppConfig.allias;
+			alliases.forEach(function(al) {
+				if(url.indexOf(al.from) == 0) {
+					url = al.to+url.substr(al.from.length+1);
+				}
+			});
+			return url;
+			
+		}
+		function rewriteURL(url) {
+			var rewrites = webAppConfig.urlRewrite;
+			rewrites.forEach(function(rewrite) {
+				if(rewrite.from.test(url)) {
+					url = url.replace(rewrite.from,rewrite.to);
+				}
+			});
+			return url;
+		}
 		var requestHandler = function(req,res) {
 			try {
 				console.log("--------------------");
@@ -143,29 +194,32 @@
 				console.log("url:\t\t"+req.url);
 				console.log("time:\t\t"+new Date());
 				console.log("--------------------");
+				var url = rewriteURL(alliasURL(req.url));
 				
+				if(url == "/") {
 				
-				if(req.url == "/") {
-					res.writeHeader(302,{
-						"Location":homepage
-					});
-					res.end();
-				} else if(dynamicPattern.test(req.url)) {
-					dynamicRequest(req,res);
+					sendRedirect(res,homepage);
+					
+				} else if(dynamicPattern.test(url)) {
+					dynamicRequest(req,res,url);
 				} else {
-					staticRequest(req,res);
+					staticRequest(req,res,url);
 				}
 			} catch(e) {
-				res.writeHeader(500);
-				res.end((e||"").toString());
+			
+				writeErrorPage(res,500,(e||"").toString());
+				
 			}
 		};
 		this.requestHandler = requestHandler;
 	}
 	
-	exports.Server.prototype.startServer = function(_port) {
-		http.createServer(this.requestHandler).listen(_port);
-		console.log("WebServer started at port"+_port);
+	exports.Server.prototype.start = function() {
+		var server = http.createServer(this.requestHandler);
+		(this.config.ports||[]).forEach(function(port) {
+			server.listen(port);
+			console.log("WebServer started at port"+port);
+		});
 	}
 })();
 

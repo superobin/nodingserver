@@ -1,0 +1,21 @@
+{
+	"webServerConfig":[
+		{
+			"configFile":"./webServer1.json",
+			"standalone":false,
+			"autorelauch":false
+		},
+		{
+			"configFile":"./webServer2.json",
+			"standalone":false,
+			"autorelauch":false
+		}
+	],
+	"frontServerConfig":[
+		{
+			"configFile":"./frontServer.json",
+			"standalone":false,
+			"autorelauch":false
+		}
+	]
+}
