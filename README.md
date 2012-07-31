@@ -3,6 +3,8 @@ nodingserver
 
 NodingServer is a simple webServer with a front server(reverse proxy).
 
+The code changed greatly,and we'll commit the new readme sometime later.
+
 How to Use
 ------------
 	First config the config file.
@@ -50,9 +52,12 @@ Restrictions
 -------
 
 The server did not passed the test on node v0.6 and earlier.
+
 We only tested it on node v0.8
 
 We only using utf8 in source code and webapp files.
+
+No https suppport.
 
 License
 -------

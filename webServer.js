@@ -1,26 +1,9 @@
 var fs = require("fs");
 (function() {
 	var http = require("http");
-	function loadWebAppConfig(webServerConfig){
-		var filePath = webServerConfig.webroot+"/.webappconfig";
-		if(fs.existsSync(filePath)) {
-			try {
-				return eval("("+fs.readFileSync(filePath,"utf8")+")");
-			} catch(e) {
-				console.log("ERROR in .webappconfig file\n"+e.toString());
-			}
-		} else {
-			console.log("WARN no .webappconfig file specified");
-			return {};
-		}
-	}
-	
 	exports.Server = function(webServerConfig) {
-		var webAppConfig = loadWebAppConfig(webServerConfig);
-		
-		var webRoot = webServerConfig.webroot || "./webapp";
+		var _server = this;
 		this.config = webServerConfig;
-		var homepage = webAppConfig.homepage||"/index.html";
 		var encoding = 'utf8';
 		var fs  = require("fs");
 		var zlib = require("zlib");
@@ -30,13 +13,22 @@ var fs = require("fs");
 		var ContentTypeMap = require("./content_types");
 		var actionMap = {};
 		
-		var BaseAction = function(codePath) {
-			var code = fs.readFileSync(webRoot+codePath,encoding);
+		var BaseAction = function(codePath,context) {
+			var webroot = context.webroot;
+			var code = fs.readFileSync(webroot+codePath,encoding);
 			this.script =vm.createScript(code,codePath);
 			var sandbox = this.sandbox = {
-				webRoot:webRoot,
+				webroot:webroot,
 				encoding:encoding,
-				require:require
+				require:require,
+				requireUserLib:function() {
+					var ary = [];
+					ary[0] = webroot+context.webAppConfig.libroot+"/"+arguments[0];
+					for(var i = 0;i<arguments.length;i++) {
+						ary.push(arguments[i]);
+					}
+					require.apply(null,arguments);
+				}
 			};
 			for(var k in global) {
 				sandbox[k] = global[k];
@@ -50,15 +42,14 @@ var fs = require("fs");
 			this.script.runInNewContext(this.sandbox);
 		}
 		
-		
-		
-		function dynamicRequest(req,res,url) {
+		function dynamicRequest(req,res,url,context) {
+			url = stripeContextPath(url,context.contextPath);
+			var webroot = context.webroot;
 			var errHandler = function (err) {
-			
-				writeErrorPage(req,res,500,err.toString());
+				writeErrorPage(req,res,500,err.toString(),context);
 			}
 			var urlObj =  urlUtil.parse(url);
-			var filePath = webRoot+urlObj.pathname;
+			var filePath = webroot+urlObj.pathname;
 			var dirPath = filePath.substr(0,filePath.lastIndexOf("/"));
 			if(actionMap[urlObj.pathname]) {
 				try {
@@ -70,22 +61,21 @@ var fs = require("fs");
 				fs.exists(filePath, function (exists) {
 					if(exists) {
 							try {
-								var action = new BaseAction(urlObj.pathname,webRoot);
+								var action = new BaseAction(urlObj.pathname,context);
 								actionMap[urlObj.pathname] = action;
 								action.process(req,res);
-								fs.watch(webRoot+urlObj.pathname,function(a,b) {
+								fs.watch(webroot+urlObj.pathname,function(a,b) {
 									delete actionMap[urlObj.pathname];
-									fs.unwatchFile(webRoot+urlObj.pathname);
+									fs.unwatchFile(webroot+urlObj.pathname);
 								});
 							} catch(e) {
 								errHandler(e);
 							}
 					} else {
-						writeErrorPage(req,res,404,"Not Found");
+						writeErrorPage(req,res,404,"Not Found",context);
 					}
 				});
 			}
-			
 		}
 		
 		function writeBasic(res,code,message) {
@@ -96,15 +86,17 @@ var fs = require("fs");
 			//res.writeHead(404);	
 			//res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 		}
+		
 		function sendRedirect(res,location) {
 			res.writeHead(302,{
 				"Location":location
 			});
 			res.end();
 		}
-		function writeErrorPage(req,res,code,message) {
-			var pagePath = (webAppConfig.errorpage||{})[code];
-			console.log(webRoot+pagePath);
+		
+		function writeErrorPage(req,res,code,message,context) {
+			var pagePath = (context.webAppConfig.errorpage||{})[code];
+			
 			if(req.errorObject||req.errorCode) {//prevent from error loop
 				writeBasic(res,req.errorCode,"Page Not Found");
 			} else if(pagePath) {
@@ -118,18 +110,20 @@ var fs = require("fs");
 					}
 					writeHead.apply(this,ary);
 				}
-				
-				console.log(pagePath);
-				
-				baseHandler(req,res,pagePath);
+				var contextPath = context.contextPath;
+				if(contextPath[contextPath.length-1] == "/"){
+					contextPath = contextPath.substr(0,contextPath.length-2);
+				}
+				baseHandler(req,res,contextPath+pagePath);
 			} else {
 				writeBasic(res,code,message);
 			}
 		}
 		
-		function staticRequest(req,res,url) {
+		function staticRequest(req,res,url,context) {
+			url = stripeContextPath(url,context.contextPath);
 			var urlObj =  urlUtil.parse(url);
-			var filePath = webRoot+urlObj.pathname;
+			var filePath = context.webroot+urlObj.pathname;
 			
 			if(filePath.indexOf(".")>=0) {
 				var extName = filePath.substr(filePath.lastIndexOf(".")+1);
@@ -151,12 +145,11 @@ var fs = require("fs");
 			if(compressMethod) {
 				header['Content-Encoding'] = compressMethod;
 			}
-			console.log(filePath,fs.existsSync(filePath));
 			fs.exists(filePath, function (exists) {
 				if(exists) {
 					fs.readFile(filePath,function(err,data){
 						if(err) {
-							writeErrorPage(req,res,404,"Not Found");
+							writeErrorPage(req,res,404,"Not Found",context);
 							return;
 						}
 						res.writeHead(200, header);
@@ -170,10 +163,11 @@ var fs = require("fs");
 						
 					});
 				} else {
-					writeErrorPage(req,res,404,"Not Found");
+					writeErrorPage(req,res,404,"Not Found",context);
 				}
 			});
 		}
+		
 		function supportedCompressMethod(req) {
 			var acceptEncoding = req.headers["accept-encoding"]||"";
 			if(acceptEncoding.indexOf("deflate")>=0){
@@ -183,9 +177,8 @@ var fs = require("fs");
 			};
 		}
 		
-	
-		function rewriteURL(url) {
-			var rewrites = webAppConfig.urlRewrite;
+		function rewriteURL(url,context) {
+			var rewrites = context.webAppConfig.urlRewrite;
 			rewrites.forEach(function(rewrite) {
 				if(rewrite.from.test(url)) {
 					url = url.replace(rewrite.from,rewrite.to);
@@ -194,21 +187,85 @@ var fs = require("fs");
 			return url;
 		}
 		
+		var webAppConfigs={},webRoots = {};
+		function loadFileIntoJsonAndPutInObject(filePath,key) {
+			if(fs.existsSync(filePath)) {
+				try {
+					webAppConfigs[key] = eval("("+fs.readFileSync(filePath,"utf8")+")");
+				} catch(e) {
+					console.log("ERROR in .webappconfig file\n"+e.toString());
+					//should use default
+				}
+			} else {
+				console.log("WARN no .webappconfig file specified");
+			}
+		}
+		
+		function loadWebAppConfig(webServerConfig){
+			var filePath = webServerConfig.webroot+"/.webappconfig";
+			loadFileIntoJsonAndPutInObject(filePath,"/");
+			webRoots["/"] = webServerConfig.webroot;
+			(webServerConfig.alias||[]).forEach(function(o) {
+				var contextPath = o.contextPath;
+				var approot = o.approot;
+				webRoots[contextPath] = approot;
+				var filePath = approot+"/.webappconfig";
+				loadFileIntoJsonAndPutInObject(filePath,contextPath);
+				
+			});
+		}
+		
+		function stripeContextPath(url,contextPath) {
+			//simple use
+			if(contextPath == "/") {
+				contextPath = "";
+			}
+			return url.substr(contextPath.length);
+		}
+		
+		function matchContextPath(url) {
+			//to be improved
+			var reg = /^(\/(?:.+?))(?:\/.*)?$/;
+			if(reg.test(url)) {
+				var contextPath = url.replace(reg,"$1");
+			} else {
+				contextPath = "/";
+			}
+			if(contextPath in webRoots) {
+				return contextPath;
+			} else {
+				return "/";
+			}
+			
+		}
+		
 		function baseHandler(req,res,url) {
+			
+			var webServerConfig = _server.config;
+			loadWebAppConfig(webServerConfig);
+			var contextPath = matchContextPath(url);
+			var webAppConfig = webAppConfigs[contextPath];
+			var webroot = webRoots[contextPath];
+			var context = {
+				webAppConfig:webAppConfig,
+				webroot:webroot,
+				contextPath:contextPath
+			}
+			var homepage = webAppConfig.homepage||"/index.html";
 			try {
-				var url = rewriteURL(url);
+				var url = rewriteURL(url,context);
 				if(url == "/") {
 					sendRedirect(res,homepage);
 				} else if(dynamicPattern.test(url)) {
-					dynamicRequest(req,res,url);
+					dynamicRequest(req,res,url,context);
 				} else {
-					staticRequest(req,res,url);
+					staticRequest(req,res,url,context);
 				}
 			} catch(e) {
-				writeErrorPage(req,res,500,(e||"").toString());
-				
+				writeErrorPage(req,res,500,(e||"").toString(),context);
 			}
 		}
+		
 		var requestHandler = function(req,res) {
 			console.log("--------------------");
 			console.log("connector:\t"+req.connection.remoteAddress+":"+req.connection.remotePort);
@@ -218,6 +275,7 @@ var fs = require("fs");
 			console.log("--------------------");
 			baseHandler(req,res,req.url);
 		};
+		
 		this.requestHandler = requestHandler;
 	}
 	
@@ -228,6 +286,7 @@ var fs = require("fs");
 			console.log("WebServer started at port"+port);
 		});
 	}
+	
 })();
 
 

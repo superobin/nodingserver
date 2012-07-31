@@ -12,7 +12,7 @@
 			"to":"/"
 		}
 	],
-	"homepage":"/index2.html",
+	"homepage":"/index.html",
 	"errorpage":{
 		"404":"/404.html"
 	}

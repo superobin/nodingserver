@@ -7,7 +7,7 @@
 			"doNotContinue":true
 		}
 	],
-	"homepage":"/index2.html",
+	"homepage":"/index.html",
 	"errorpage":{
 		"404":"/404.html",
 		"500":"/500.action"
