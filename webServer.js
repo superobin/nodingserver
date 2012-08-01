@@ -289,11 +289,20 @@ var fs = require("fs");
 	
 	exports.Server.prototype.start = function() {
 		var server = http.createServer(this.requestHandler);
-		(this.config.ports||[]).forEach(function(port) {
-			server.listen(port);
-			console.log("WebServer started at port"+port);
+		var ports = [].concat(this.config.ports);
+		var firstPort = ports.shift();
+		server.listen(firstPort);
+		
+		console.log("WebServer listening at port"+firstPort);
+		(ports||[]).forEach(function(port) {
+			var Agent = require("./portRedirectAgent.js").Agent;
+			var agent = new Agent(port,firstPort);
+			
+			agent.start();
+			console.log("WebServer listening at port"+port+"(redirected)");
 		});
 	}
+	
 	
 })();
 

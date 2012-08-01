@@ -3,7 +3,7 @@
 
 WebServer和FrontServer在配置文件上拆分 OK
 
-WebServer的多端口支持 NOT SUPPORTED
+WebServer的多端口支持 OK(use port redirect)
 
 
 WebServer的webapp级配置文件规划 .webappconfig OK
