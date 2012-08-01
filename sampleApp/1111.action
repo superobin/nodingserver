@@ -1,2 +1,5 @@
 requireUserLib("module.js");
+var session = context.session;
+response.write(JSON.stringify(session));
+session.put(""+Math.random(),""+Math.random());
 response.end("");

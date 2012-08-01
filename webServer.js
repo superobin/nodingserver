@@ -21,6 +21,7 @@ var fs = require("fs");
 				webroot:webroot,
 				encoding:encoding,
 				require:require,
+				context:context,
 				requireUserLib:function() {
 					var ary = [];
 					ary[0] = webroot+context.webAppConfig.libdir+"/"+arguments[0];
@@ -82,10 +83,6 @@ var fs = require("fs");
 		function writeBasic(res,code,message) {
 			res.writeHead(code);
 			res.end("<html><head><title>"+code+"</title></head><body><h1>"+message||"No error message."+"</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
-			
-			
-			//res.writeHead(404);	
-			//res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
 		}
 		
 		function sendRedirect(res,location) {
@@ -119,7 +116,9 @@ var fs = require("fs");
 				writeBasic(res,code,message);
 			}
 		}
-		
+		function generateSessionId() {
+			return new Buffer(Math.random()+","+Math.random()+","+Math.random()).toString('base64');
+		}
 		function staticRequest(req,res,url,context) {
 			url = stripeContextPath(url,context.contextPath);
 			var urlObj =  urlUtil.parse(url);
@@ -139,6 +138,7 @@ var fs = require("fs");
 			}
 			
 			var compressMethod = supportedCompressMethod(req);
+			
 			var header = {
 				'Content-Type': contentType
 			};
@@ -152,14 +152,18 @@ var fs = require("fs");
 							writeErrorPage(req,res,404,"Not Found",context);
 							return;
 						}
-						res.writeHead(200, header);
-						if(compressMethod) {
-							zlib[compressMethod](data, function(err, buffer) {
-								res.end(buffer);
-							});
-						} else {
-							res.end(data);
-						}
+						fs.lstat(filePath,function(err,stat) {
+							var mtime = stat.mtime;
+							header['last-modified'] = mtime.toUTCString();
+							res.writeHead(200, header);
+							if(compressMethod) {
+								zlib[compressMethod](data, function(err, buffer) {
+									res.end(buffer);
+								});
+							} else {
+								res.end(data);
+							}
+						});
 						
 					});
 				} else {
@@ -170,10 +174,10 @@ var fs = require("fs");
 		
 		function supportedCompressMethod(req) {
 			var acceptEncoding = req.headers["accept-encoding"]||"";
-			if(acceptEncoding.indexOf("deflate")>=0){
-				return "deflate"
-			} else if(acceptEncoding.indexOf("gzip")>=0){
+			if(acceptEncoding.indexOf("gzip")>=0){
 				return "gzip"
+			} else if(acceptEncoding.indexOf("deflate")>=0){//on my machine,ie8 does not support deflate,but passed accept-encoding:gzip,deflate
+				return "deflate"
 			};
 		}
 		
@@ -244,8 +248,68 @@ var fs = require("fs");
 			}
 			return str;
 		}
-		function baseHandler(req,res,url) {
+		var sessionStorage = {};//
+		var cookieProcessRegexp = /\s*(.+?)=(.+?)(?:\s*)(?:;|$)/gi;
+		function parseCookie(cookieStr) {
+			var obj = {};
+			cookieStr.replace(cookieProcessRegexp,function(t,key,value) {
+				obj[key]=value;
+			});
+			return obj;
+		}
+		function Session(json) {
+			if(!json) {
+				this.data = {};
+			} else if(typeof json == "string") {
+				this.data = {};
+				this.deseriaze(json);
+			} else {
+				this.data = {};
+				for(var k in json) {
+					this.data[k] = json[k];
+				}
+			}			
+		}
+		Session.prototype.put = function(key,value) {
 			
+			this.data[key] = value;
+			this.performChanged();
+		};
+		Session.prototype.get = function(key) {
+			return this.data[key];
+		};
+		Session.prototype.clear = function() {
+			this.data = {};
+			this.performChanged();
+		};
+		Session.prototype.seriaze = function() {
+			return JSON.stringify(this.data);
+		};
+		Session.prototype.deseriaze = function(json) {
+			var d = JSON.parse(json);
+			for(var k in d) {
+				this.put(k,d[k]);
+			}
+			this.performChanged();
+		};
+		Session.prototype.performChanged = function() {
+			//persist logic later
+		};
+		
+		
+		function baseHandler(req,res,url) {
+			var cookie = req.headers['cookie'];
+			if(!cookie) {
+				var sessionId = generateSessionId();
+				res.setHeader("set-cookie",["SESSIONID="+sessionId,"path=/"]);
+			} else {
+				var cookieObj = parseCookie(req.headers['cookie']||"")
+				sessionId = cookieObj["SESSIONID"];
+			
+			}
+			
+			var session = sessionStorage[sessionId] = sessionStorage[sessionId]||new Session();
+
 			var webServerConfig = _server.config;
 			loadWebAppConfig(webServerConfig);
 			var contextPath = matchContextPath(url);
@@ -254,13 +318,12 @@ var fs = require("fs");
 			var context = {
 				webAppConfig:webAppConfig,
 				webroot:webroot,
-				contextPath:contextPath
+				contextPath:contextPath,
+				session:session
 			}
 			var homepage = webAppConfig.homepage||"/index.html";
-			console.log(context);
 			try {
 				var url = rewriteURL(url,context);
-				
 				var stripedURL = stripeContextPath(url,contextPath);
 				if(stripedURL == "/"||stripedURL == "") {
 					sendRedirect(res,stripeLastSlash(contextPath)+homepage);
@@ -275,8 +338,13 @@ var fs = require("fs");
 		}
 		
 		var requestHandler = function(req,res) {
+		
+			res.setHeader("server","NodingServer(nodejs)");
+			var visitStack = "connector:\t"+(req.headers['x-forwarded-for']
+				?(req.headers['x-forwarded-for']+","+req.connection.remoteAddress)
+				:req.connection.remoteAddress);
 			console.log("--------------------");
-			console.log("connector:\t"+req.connection.remoteAddress+":"+req.connection.remotePort);
+			console.log(visitStack);
 			console.log("host:\t\t"+req.headers.host);
 			console.log("url:\t\t"+req.url);
 			console.log("time:\t\t"+new Date());
@@ -302,8 +370,6 @@ var fs = require("fs");
 			console.log("WebServer listening at port"+port+"(redirected)");
 		});
 	}
-	
-	
 })();
 
 

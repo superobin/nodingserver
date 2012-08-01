@@ -1,6 +1,6 @@
 (function() {
 	var encoding = 'utf8';
-	
+	var fs = require("fs");
 	function write404(res) {
 		res.writeHeader(404);	
 		res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
@@ -23,7 +23,20 @@
 			return "gzip"
 		};
 	}
-	
+	function createServer(protocol,options,handler) {
+		if(protocol.toLowerCase() == "https") {
+			var key = fs.readFileSync(options.keyPath);
+			var cert = fs.readFileSync(options.certPath);
+			options.key = key;
+			options.cert =cert;
+			console.log(options);
+			return require("https").createServer(options,handler);
+		} else if(protocol.toLowerCase() == "http") {
+			return require("http").createServer(handler);
+		} else {
+			throw "Protocol "+protocol+" not supported!!!";
+		}
+	}
 	exports.Server = function(config) {
 		var hostMap = config.mappingHosts;
 		var port = this.port = config.listenPort;
@@ -32,7 +45,7 @@
 		var LRUCache = require("./LRUCache.js").LRUCache;
 		var staticCache = new  LRUCache(config.cacheSize);
 		
-		this.server = http.createServer(function(req,res) {
+		this.server = createServer(config.protocol||"http",config.httpsOptions||{},function(req,res) {
 			try {
 				var headers = req.headers;
 				var hostport = hostMap[headers.host.split(":")[0]];
@@ -95,11 +108,10 @@
 				if(!isDynamic(hostport.noCachePattern,req.url)&&req.method=="GET") {
 					var compressMethod = supportedCompressMethod(req)||"plain";
 					var cacheKey = compressMethod+"|"+hostport.host+":"+hostport.port+req.url;
-					console.log("CacheKey:"+cacheKey);
+					
 					var cachedEntry = staticCache.get(cacheKey);
 					var writeCachedEntry = function(entry) {
 						res.writeHeader(entry.statusCode,entry.headers);
-						console.log(entry.statusCode,entry.headers);
 						entry.forEach(function(o) {
 							res.write(o);
 						});

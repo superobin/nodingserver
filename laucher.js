@@ -4,7 +4,7 @@ var laucherConfig = JSON.parse( fs.readFileSync("./config/laucher.json","utf8"))
 
 var FrontServer = require("./frontServer").Server;
 var WebServer = require("./webServer.js").Server;
-console.log(laucherConfig);
+
 if(laucherConfig.webServerConfig) {
 	laucherConfig.webServerConfig.forEach(function(config) {
 		try {
@@ -32,6 +32,7 @@ if(laucherConfig.webServerConfig) {
 } else {
 	console.log("No web server configed");
 }
+
 if(laucherConfig.frontServerConfig) {
 	laucherConfig.frontServerConfig.forEach(function(config) {
 		var file = config.configFile
@@ -47,19 +48,3 @@ if(laucherConfig.frontServerConfig) {
 		frontServer.start();
 	});
 }
-
-/*
-
-
-
-var frontServer = new FrontServer(config);
-frontServer.startServer(config.frontServerPort);
-
-var servers = eval("("+fs.readFileSync("frontServer.config.json",encoding)+")");
-if(servers) {
-	servers.forEach(function(o) {
-		var server = new WebServer(o.webroot,o.homepage);
-		server.startServer(o.port);
-	});
-}
-*/

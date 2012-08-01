@@ -1,35 +1,65 @@
-﻿注释/说明文档
-
-
-WebServer和FrontServer在配置文件上拆分 OK
+﻿WebServer和FrontServer在配置文件上拆分 OK
 
 WebServer的多端口支持 OK(use port redirect)
 
-
 WebServer的webapp级配置文件规划 .webappconfig OK
 
-WebServer的URLRewrite支持  doNotContinue
+WebServer的URLRewrite支持  Partly.need `doNotContinue` support
 
-WebServer的Alias 注意 contextPath
-
+WebServer的Alias OK
 
 WebAPP级errorpage配置 OK
 
 WebAPP级userlib OK
 
-WebServer的Session/Cookie支持
+WebServer的Session/Cookie支持 OK
+
+LastModified头 OK
+
+FrontServer的https支持 OK
+
+禁止访问lib目录和.webappconfig文件
+
+
 WebServer的View层模板实现
 
-WebServer/FrontServer的https支持
-WebServer/FrontServer的WebSocket支持
+filter实现
+
+listener实现
+
+WebServer的https支持
+
+FrontServer发送https请求支持
+
+Etag头
+
+If-None-Match:(etag)
+
+If-Modified-Since头
+
+Expired头
+
+Cache-Control:max-age=0头
+
+Pragma:no-cache头
+
 
 FrontServer负载均衡的实现
+
 WebServer/FrontServer的多进程/集群支持
 
 缓存服务器实现，基于memcache协议
+
 FrontServer静态缓存清除通知接口
+
 WebServer的Session/Cookie缓存
 
 日志服务器实现，基于syslog协议
 
+WebServer/FrontServer的WebSocket支持
+
+整理代码
+
 测试用例
+
+注释/说明文档

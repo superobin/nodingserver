@@ -1,0 +1,1 @@
+install openssl, and run  openssl genrsa -out privatekey.pem 1024   openssl req -new -key privatekey.pem -out certificate.csr  openssl x509 -req -in certificate.csr -signkey privatekey.pem -out certificate.pem  
