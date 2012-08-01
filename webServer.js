@@ -249,7 +249,7 @@ var fs = require("fs");
 			return str;
 		}
 		var sessionStorage = {};//
-		var cookieProcessRegexp = /\s*(.+?)=(.+?)(?:\s*)(?:;|$)/gi;
+		var cookieProcessRegexp = /\s*(.+?)\s*=\s*(.+?)(?:\s*)(?:;|$)/gi;
 		function parseCookie(cookieStr) {
 			var obj = {};
 			cookieStr.replace(cookieProcessRegexp,function(t,key,value) {

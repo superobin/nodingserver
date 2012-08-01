@@ -29,7 +29,6 @@
 			var cert = fs.readFileSync(options.certPath);
 			options.key = key;
 			options.cert =cert;
-			console.log(options);
 			return require("https").createServer(options,handler);
 		} else if(protocol.toLowerCase() == "http") {
 			return require("http").createServer(handler);
