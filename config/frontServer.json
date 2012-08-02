@@ -15,8 +15,8 @@
 			"noCachePattern":[/^.+?([a-zA-Z0-9\-_]+)\.action(\?.+)?$/]
 		}
 	},
-	"listenPort":443,
-	"protocol":"https",
+	"listenPort":8081,
+	"protocol":"http",
 	"httpsOptions":{
 		keyPath: "./cert/privatekey.pem",
 		certPath:"./cert/certificate.pem"
