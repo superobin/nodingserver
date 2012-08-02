@@ -3,9 +3,12 @@
 	var fs = require("fs");
 	function write404(res) {
 		res.writeHeader(404);	
-		res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date()+"</i></body></html>");
+		res.end("<html><head><title>404 Page Not Found</title></head><body><h1>404 Page Not Found</h1><hr/>NodingServer v0.1 <i>"+new Date().toUTCString()+"</i></body></html>");
 	}
-	
+	function write400(res) {
+		res.writeHeader(400);	
+		res.end("<html><head><title>400 Bad Request</title></head><body><h1>400 Bad Request.</h1><hr/>NodingServer v0.1 <i>"+new Date().toUTCString()+"</i></body></html>");
+	}
 	function isDynamic(patterns,url) {
 		for(var i=0;i<patterns.length;i++) {
 			if(patterns[i].test(url)) {
@@ -47,12 +50,17 @@
 		this.server = createServer(config.protocol||"http",config.httpsOptions||{},function(req,res) {
 			try {
 				var headers = req.headers;
+				
+				if(!headers.host){
+					write400(res);
+					return;
+				}
 				var hostport = hostMap[headers.host.split(":")[0]];
 				if(!hostport){
 					write404(res);
 					return;
 				}
-				headers.host = hostport.host +":"+hostport.port;
+				headers.host = hostport.host +":"+(hostport.port||80);//for host with no port 
 				headers['x-forwarded-for'] = headers['x-forwarded-for']
 					?(headers['x-forwarded-for']+","+req.connection.remoteAddress)
 					:req.connection.remoteAddress;
