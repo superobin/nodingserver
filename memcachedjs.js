@@ -15,16 +15,18 @@
 	}
 	var CommandCategoryMap = {
 		"add":StorageCommand,
-		"set":StorageCommand
+		"set":StorageCommand,
+		"get":GetCommand
 	}
 	var CommandLengthMap = {
-		"add":5,
-		"set":5
+		"add":[5,5],
+		"set":[5,5],
+		"get":[2,128]
 	}
 	Command.parse = function(cmdBody) {
 		var segments = cmdBody.split(" ");
 		var cmdName = segments[0];
-		if(CommandCategoryMap[cmdName]&&segments.length == CommandLengthMap[cmdName]) {
+		if(CommandCategoryMap[cmdName]&&segments.length >= CommandLengthMap[cmdName][0]&&segments.length <= CommandLengthMap[cmdName][1]) {
 			var cmd = CommandCategoryMap[cmdName].parse(segments);
 		} else {
 			cmd = new ErrorCommand("ERROR","cannot reconize the command");
@@ -42,7 +44,6 @@
 	Command.prototype.init = function(parser) {
 		this.parser = parser;
 		this.stream = parser.stream;
-		
 		return this;
 	}
 
@@ -50,7 +51,9 @@
 		throw "Abstract command!Please implement it";
 	}
 	
-	
+	function GetCommand() {
+		
+	}
 	function StorageCommand() {
 		this.key = "";
 		this.flags = 0;
@@ -65,10 +68,25 @@
 		} else if(cmdName == "set") {
 			cmd = new SetCommand();
 		}
+		
 		cmd.key = cmdBodySegments[1];
 		cmd.flags =  cmdBodySegments[2]-0;
 		cmd.exptime = cmdBodySegments[3]-0;
 		cmd.bytes = cmdBodySegments[4]-0;
+		if(isNaN(cmd.flags)) {
+			cmd.error("ERROR","error flags");
+			return cmd;
+		}
+		
+		if(isNaN(cmd.exptime)) {
+			cmd.error("ERROR","error exptime");
+			return cmd;
+		}
+		
+		if(isNaN(cmd.bytes)) {
+			cmd.error("ERROR","error bytes");
+			return cmd;
+		}
 		
 		cmd.needData = true;
 		console.log(cmd);
@@ -80,11 +98,32 @@
 	}
 	util.inherits(AddCommand, StorageCommand);
 	AddCommand.prototype.execute = function() {
-		this.stream.write("execute add command");
+		if(this.key in storage) {
+			this.stream.write("NOT_STORED\r\n");
+		} else {
+			var entry = {
+				data:this.buffer,
+				flags:this.flags,
+				exptime:this.exptime,
+				key:this.key
+			}
+			storage[this.key] = entry;
+			this.stream.write("STORED\r\n");
+		}
 	};
 	
 	function SetCommand() {
-		
+		if(this.key in storage) {
+			
+			var entry = storage[this.key];
+			entry.data=this.buffer;
+			entry.flags=this.flags;
+			entry.exptime=this.exptime;
+			entry.key=this.key;
+			this.stream.write("STORED\r\n");
+		} else {
+			this.stream.write("NOT_STORED\r\n");
+		}
 	}
 	util.inherits(SetCommand, StorageCommand);
 	
@@ -98,8 +137,7 @@
 	}
 	util.inherits(ErrorCommand, Command);
 	ErrorCommand.prototype.execute = function() {
-		
-		var str = this.errorKind +" "+this.errMessage;
+		var str = this.errorKind + (this.errMessage ?(" "+this.errMessage):"");
 		this.stream.write(str);
 		this.stream.write("\r\n");
 	};
@@ -217,15 +255,6 @@ var Server = exports.Server;
 var server = new Server();
 server.listen(2001);
 
-var socket = new net.Socket();
-var fs = require("fs");
-socket.connect(2000,function() {
-	this.pipe(process.stdout);
-	var buffer = fs.readFileSync("./memcached.exe");
-	this.write("add mykey 123 3600 "+buffer.length+"\r\n"); 
-	this.write(buffer);
-	this.write("\r\n");
-});
 
 /*
 
