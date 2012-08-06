@@ -1,0 +1,301 @@
+(function() {
+	var magicTime = 1344222142;//in seconds
+	var slabSize = 1024*1024;
+	var powerSmallest = 1;
+	var powerLargest = 16;
+	var minChunkSize = 2;
+	var maxSize = 64*1024*1024;
+	var usedSize = 0;
+	//These constants should be parameterized into class.
+	var LinkedList = require("./LinkedList.js").LinkedList;
+	
+	function Storage() {
+		this.slabClasses = [];
+		var i = powerSmallest - 1;
+		for(;i<powerLargest;i++) {
+			var size = minChunkSize<<i;
+			
+			this.slabClasses[i] = new SlabClass(size);
+		}
+		this.hashMap = {};
+	}
+	
+	Storage.prototype.selectSlabClass = function(size) {
+		for(var i=0;i<this.slabClasses.length;i++) {
+			if(size>this.slabClasses[i].size) {
+				continue;
+			}
+			return i-1;
+		}
+		return 0;
+		
+	}
+	Storage.prototype.put = function(key,item) {
+		var slabClassIndex = this.selectSlabClass(item.size);
+	
+		console.log("Selected slab class:"+slabClassIndex);
+		if(slabClassIndex<0){
+			return false;
+		}
+		var slabClass = this.slabClasses[slabClassIndex];
+		var oldItem = this.get(key);
+		if(oldItem) {
+			oldItem.writeDeleteFlag(1);
+		}
+		var itemId = slabClass.add(item)+slabClassIndex*10000000000;
+		this.hashMap[key]=itemId;
+		//this.queue.push(itemId);
+	}
+	Storage.prototype.get = function(key) {
+		var itemKey = this.hashMap[key];
+		var item = this._get(itemKey);
+		if(item) {
+			item.hit();
+		}
+		return item;
+	}
+	Storage.prototype._get = function(itemKey) {
+		if(itemKey) {
+			var slabClassIndex = Math.floor(itemKey/10000000000);//itemKey[0];
+			var slabIndex = Math.floor((itemKey-slabClassIndex*10000000000)/10000000);//itemKey[1];
+			var chunkIndex = itemKey-slabClassIndex*10000000000-slabIndex*10000000;//itemKey[2];
+			var slabClass = this.slabClasses[slabClassIndex];
+			var slab = slabClass.slabs[slabIndex];
+			if(!slab) {
+				return null;
+			}
+			
+			var offset = chunkIndex*slab.size;
+			
+			var item = new Item(slab.buffer.slice(offset,offset+slab.size));
+			item.key = itemKey;
+			return item;
+		}
+	}
+	
+	
+	//-1 means not found.
+	Storage.prototype.isDeleted = function(header) {
+		return header?header[8]:-1;
+	}
+	
+	//-1 means not found.
+	Storage.prototype.isExperied(header) {
+		if(header) {
+			var expireTime = header.readUInt32BE(4)+magicTime;
+			return expireTime<new Date().getTime()/1000 ? 1:0;
+		} else {
+			return -1;
+		}
+	}
+	
+	Storage.prototype.getHeader = function(key) {
+		var itemKey = this.hashMap[key];
+		if(itemKey) {
+			var slabClassIndex = Math.floor(itemKey/10000000000);//itemKey[0];
+			var slabIndex = Math.floor((itemKey-slabClassIndex*10000000000)/10000000);//itemKey[1];
+			var chunkIndex = itemKey-slabClassIndex*10000000000-slabIndex*10000000;//itemKey[2];
+			var slabClass = this.slabClasses[slabClassIndex];
+			var slab = slabClass.slabs[slabIndex];
+			if(!slab) {
+				return null;
+			}
+			var offset = chunkIndex*slab.size;
+			return slab.buffer.slice(offset,offset+Item.prototype.headerSize);
+		}
+		return null;
+	}
+	
+	Storage.prototype.keyExists = function(key) {
+		return key in this.hashMap;//Easy implement
+	}
+	Storage.prototype.remove = function (key) {
+		var itemKey = this.hashMap[key];
+		var item = this._get(itemKey);
+		
+		if(item) {
+			item.writeDeleteFlag(1);
+			return item;
+		} else {
+			return false;
+		}
+	}
+
+	
+	function SlabClass(size) {
+		this.size = size-0;
+		this.perslab = Math.floor(slabSize/this.size);
+		this.slabs = [];
+		this.endPage = null;
+		this.solts = [];//array or linked list?
+		this.writeToTail = null;
+		this.killing = 0;
+		this.requested = 0;
+	}
+	SlabClass.prototype.add = function(item) {
+		if(!this.slabs.length) {
+			var slab = new Slab(this);
+			slab.init();
+			this.slabs.push(slab);
+		}
+		if(this.writeToTail) {//
+			var itemIdPart = this.writeToTail(item);
+			return itemIdPart;
+		} else {
+			//free logic
+		}
+	}
+	
+	function Slab(slabClass){
+		this.size = slabClass.size;
+		this.slabClass = slabClass;
+		this.index = this.slabClass.slabs.length;
+	}
+	Slab.prototype.init = function() {
+		var _this = this;
+		this.tailPos = 0;
+		if(usedSize + slabSize <=maxSize) {
+			var buffer = this.buffer = new Buffer(slabSize);
+			usedSize+=slabSize;
+			this.slabClass.writeToTail = function(item) {
+				item.save(buffer.slice(_this.tailPos,_this.size+_this.tailPos));
+				console.log(_this.size);
+				var itemChunkId = _this.tailPos/_this.size;
+				_this.tailPos+=_this.size;
+				if(_this.tailPos+_this.size>slabSize) {//If is the last chunk,try to create a new slab;
+					var slab = new Slab(_this.slabClass);
+					if(slab.init()) {
+						_this.slabClass.slabs.push(slab);
+					}
+				}
+				// dec:2digit for slabClass 3digit for slab index,7digit for itemChunkId
+				return _this.index*1000000+itemChunkId;
+			};
+			return true;
+		} else {
+			this.slabClass.writeToTail = null;
+			return false;
+		}
+	}
+	//false when free failed
+	Slab.prototype.free = function() {
+		
+	}
+	var getter = function() {
+	}
+	
+	var Item = function(arg){
+		if(typeof arg == 'number') {//arg stands for data size;
+			this.buffer = new Buffer(this.headerSize+arg);
+			this.buffer.fill(0);
+		} else if(arg) {//arg stands for data buffer
+			this.buffer = arg;
+		}
+	}
+	
+	Item.prototype.headerSize = 15;
+	Item.prototype.__defineGetter__("dataLen",function() {
+		return this.buffer.readUInt32BE(0);
+	});
+	Item.prototype.__defineGetter__("expires",function() {
+		return this.buffer.readUInt32BE(4)+magicTime;
+	});
+	Item.prototype.__defineGetter__("delFlag",function() {
+		return this.buffer.readUInt8(8);
+	});
+	Item.prototype.__defineGetter__("flags",function() {
+		return this.buffer.readUInt16BE(9);
+	});
+	
+	Item.prototype.__defineGetter__("hitCount",function() {
+		return this.buffer.readUInt32BE(11);
+	});
+	
+	Item.prototype.__defineSetter__("dataLen",function(num) {
+		return this.buffer.writeUInt32BE(num,0);
+	});
+	Item.prototype.__defineSetter__("expires",function(num) {
+		return this.buffer.writeUInt32BE(num-magicTime,4);
+	});
+	Item.prototype.__defineSetter__("delFlag",function(num) {
+		return this.buffer.writeUInt8(num,8);
+	});
+	Item.prototype.__defineSetter__("flags",function(num) {
+		return this.buffer.writeUInt16BE(num,9);
+	});
+	
+	Item.prototype.hit = function() {
+		
+		return this.buffer.writeUInt32BE(this.hitCount+1,11);
+	}
+	/**
+		if you saved the item,item will be linked with the memory.
+	*/
+	Item.prototype.save = function(buf) {
+		this.buffer.copy(buf);
+		this.buffer = buf;
+	}
+	
+	Item.prototype.__defineSetter__("data",function(buffer) {
+		if(buffer instanceof Buffer) {
+			buffer.copy(this.buffer,this.headerSize,0,this.dataLen);
+		} else {
+			throw "Data must be a buffer";
+		}
+	});
+	
+	Item.prototype.__defineGetter__("data",function() {
+		return this.buffer.slice(this.headerSize,this.headerSize+this.dataLen);
+	});
+	
+	Item.prototype.__defineGetter__("size",function() {	
+		return this.headerSize+this.dataLen;
+	});
+	
+	Item.prototype.getData = function() {
+		return this.originBuffer.slice(this.headerSize,this.headerSize+this.dataLen);
+	}
+	
+	Item.prototype.writeDeleteFlag = function (flag) {
+		this.buffer [8] = flag;
+	}
+	
+	Item.prototype.inspect = function() {
+		console.log("size:"+this.size);
+		console.log("dataLen:"+this.dataLen);
+		console.log("delFlag:"+this.delFlag);
+		console.log("expires:"+this.expires);
+		console.log("flags:"+this.flags);
+		console.log("hitCount:",this.hitCount);
+		console.log("buffer:",this.buffer);
+	}
+	Item.prototype.isExpired = function() {
+		return this.expires < new Date().getTime()/1000;
+	}
+	Item.prototype.isDeleted = function() {
+		return !!this.delFlag;
+	}
+	var storage = new Storage();
+	
+	/**
+		Test case
+	*/
+	var item = new Item(5);
+	item.dataLen = 5;
+	item.expires = (new Date().getTime()/1000+3600).toFixed(0);
+	item.delFlag = 0;
+	item.flags = 65535;
+	item.data = new Buffer("abcde","ascii");
+	
+	
+	console.log(storage.hashMap);
+	storage.put("key1",item);
+	storage.put("key2",item);
+	storage.put("key3",item);
+	storage.remove("key1");
+	storage.get("key1").inspect();
+	storage.get("key2").inspect();
+	storage.get("key3").inspect();
+	
+	
+})();

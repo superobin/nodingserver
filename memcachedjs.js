@@ -9,7 +9,8 @@
 	Server.prototype.listen = function(port) {
 		this.server.listen(port);
 	}
-	var storage = {};
+	var Storage = require("./memcacheStorage.js").Storage;
+	var storage = new Storage();
 	
 	var Command = require("./memcached_commands.js").Command;
 	function Parser(stream) {
@@ -38,12 +39,10 @@
 	
 	Parser.prototype.toggleData = function() {
 		var len = this.buffer.length;
-		console.log(this.status);
+		
 		if(this.status == 0) {
-			console.log("read command line");
 			var finished = this.readCommandBody();
 		} else if(this.requireDataLength>0&&this.buffer.length>=this.requireDataLength){
-			console.log("read data block");
 			finished = this.readDataBlock();
 		}
 		if(finished) {
@@ -83,17 +82,21 @@
 				return true;
 			}
 		}
+		
 		if(pos>0) {
 			var commandStr = this.buffer.slice(0,pos).toString("ascii");
+			
 			this.buffer = this.buffer.slice(pos+2);
+			
 			var cmd = this.cmd = Command.parse(commandStr).init(this,storage);
 			
-			console.log(cmd);
 			if(cmd.isError) {
 				cmd.execute();
 			} else if(cmd.needData) {
 				this.status = 1;
 				this.requireDataLength = cmd.bytes;
+			} else {
+				cmd.execute();
 			}
 			return true;
 		}

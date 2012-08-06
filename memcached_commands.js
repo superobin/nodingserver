@@ -45,15 +45,34 @@
 	}
 	
 	function GetCommand() {
-		
+		this.keys = [];
 	}
+	
+	util.inherits(GetCommand, Command);
 	GetCommand.parse = function(segments) {
+		console.log(this.storage);
 		segments.shift();//now segments is keys.
+		var cmd = new GetCommand();
 		segments.forEach(function(key) {
-			var entry = this.storage[key];
-			
+			cmd.keys.push(key);
 		});
-		
+		return cmd;
+	}
+	GetCommand.prototype.execute = function() {
+		try {
+			var _this = this;
+			this.keys.forEach(function(key) {
+			
+				var item = _this.storage.get(key);
+				if(item) {
+					_this.stream.write("data\r\n");
+					_this.stream.write(item.data);
+				}
+				_this.stream.write("\r\n");
+			});
+		} catch(e){
+			console.log(e);
+		}
 	}
 	function StorageCommand() {
 		this.key = "";
@@ -99,17 +118,17 @@
 	}
 	util.inherits(AddCommand, StorageCommand);
 	AddCommand.prototype.execute = function() {
-		if(this.key in this.storage) {
+		if(this.storage.keyExists(this.key)) {
 			this.stream.write("NOT_STORED\r\n");
 		} else {
-			var entry = {
-				data:this.buffer,
-				flags:this.flags,
-				exptime:this.exptime,
-				key:this.key
+			var item = this.storage.put(this.key,this.buffer);
+			if(item) {
+				item.flags = this.flags-0;
+				item.exptime = this.exptime - 0;
+				this.stream.write("STORED\r\n");
+			} else {
+				this.stream.write("NOT_STORED\r\n");//error?
 			}
-			this.storage[this.key] = entry;
-			this.stream.write("STORED\r\n");
 		}
 	};
 	
@@ -119,12 +138,11 @@
 	util.inherits(SetCommand, StorageCommand);
 	
 	SetCommand.prototype.execute = function() {
-		if(this.key in this.storage) {
-			var entry = this.storage[this.key];
-			entry.data=this.buffer;
-			entry.flags=this.flags;
-			entry.exptime=this.exptime;
-			entry.key=this.key;
+		if(this.storage.keyExists(this.key)) {
+			var item = this.storage.put(this.key,this.buffer);
+			
+			item.flags = this.flags-0;
+			item.exptime = this.exptime-0;
 			this.stream.write("STORED\r\n");
 		} else {
 			this.stream.write("NOT_STORED\r\n");

@@ -4,7 +4,7 @@
 	var slabSize = 1024*1024;
 	var powerSmallest = 1;
 	var powerLargest = 16;
-	var minChunkSize = 64;
+	var minChunkSize = 2;
 	var maxSize = 64*1024*1024;
 	var usedSize = 0;
 	var currentAlloced = 1;
@@ -19,10 +19,9 @@
 			this.slabClasses[i] = new SlabClass(size,this);
 		}
 		this.hashMap = {};
-		this.pointerMap = {};
 		this.slabClassMap = {};
 	}
-	exports.Storage = Storage;
+	
 	Storage.prototype.selectSlabClass = function(size) {
 		for(var i=0;i<this.slabClasses.length;i++) {
 			if(size>this.slabClasses[i].size) {
@@ -52,7 +51,6 @@
 		dataBuffer.copy(dataBlock,pointer+Item.prototype.headerSize);
 		
 		this.hashMap[key]=pointer;
-		this.pointerMap[pointer]=key;
 		var item = new Item(pointer);
 		item.dataLen = dataBuffer.length;
 		this.moveToHead(pointer);
@@ -64,13 +62,27 @@
 		if(!itemKey) {
 			return null;
 		}
-		console.log(itemKey);
 		var item = new Item(itemKey);
 		this.moveToHead(item.pointer);
 		if(item) {
 			item.hit();
 		}
 		return item;
+	}
+	
+	//-1 means not found.
+	Storage.prototype.isDeleted = function(header) {
+		return header?header[8]:-1;
+	}
+	
+	//-1 means not found.
+	Storage.prototype.isExperied = function(header) {
+		if(header) {
+			var expireTime = header.readUInt32BE(4)+magicTime;
+			return expireTime<new Date().getTime()/1000 ? 1:0;
+		} else {
+			return -1;
+		}
 	}
 	
 	Storage.prototype.keyExists = function(key) {
@@ -82,9 +94,6 @@
 		var item = new Item(itemKey);
 		if(item) {
 			item.writeDeleteFlag(1);
-			var pointer = this.hashMap[key];
-			delete this.pointerMap[pointer];
-			delete this.hashMap[key];
 			return item;
 		} else {
 			return false;
@@ -162,10 +171,8 @@
 			do{
 				var item =new Item(pointer);
 				if(item.isDeleted()||item.isExpired()) {
+					console.log("-------------------->>>!!<<<"+item.pointer);
 					console.log(item.isDeleted(),item.isExpired());
-					var key = this.pointerMap[item.pointer];
-					delete this.hashMap[key];
-					delete this.pointerMap[pointer];
 					return item.pointer;
 				}
 			} while(pointer = item.previous);
@@ -281,7 +288,7 @@
 	
 	Item.prototype.__defineSetter__("data",function(buffer) {
 		if(buffer instanceof Buffer) {
-			buffer.copy(dataBlock,this.pointer+this.headerSize,0,this.dataLen);
+			buffer.copy(this.buffer,this.headerSize,0,this.dataLen);
 		} else {
 			throw "Data must be a buffer";
 		}
@@ -298,21 +305,21 @@
 	Item.prototype.writeDeleteFlag = function (flag) {
 		dataBlock[this.pointer+8] = flag;
 	}
-	/*
+	
 	Item.prototype.inspect = function() {
-		console.log("size:"+this.size);
+		/*console.log("size:"+this.size);
 		console.log("dataLen:"+this.dataLen);
 		console.log("delFlag:"+this.delFlag);
 		console.log("expires:"+this.expires);
 		console.log("flags:"+this.flags);
 		console.log("hitCount:",this.hitCount);
 		console.log("data:",this.data);
-		
+		*/
 		console.log("-------------------");
 		console.log("previous:",this.previous);
 		console.log("next:",this.next);
 		console.log("-------------------");
-	}*/
+	}
 	Item.prototype.isExpired = function() {
 		return this.expires < new Date().getTime()/1000;
 	}
@@ -328,7 +335,7 @@
 	
 	/**
 		Test case
-	
+	*/
 	function test(key,data) {
 		var item = storage.put(key,new Buffer(data,"ascii"));
 		item.expires = (new Date().getTime()/1000+3600).toFixed(0);
@@ -388,6 +395,6 @@
 		}
 	});
 
-	*/
+	
 	
 })();
